@@ -446,21 +446,17 @@ def load_model(model_id: str, serialized_model: str) -> str:
 
 
 # Expose app for uvicorn (e.g., uvicorn server:app)
-# Try to get the ASGI app from FastMCP for streamable HTTP
+# Import the FastAPI app from app.py which properly handles MCP protocol
 try:
-    if hasattr(mcp, 'streamable_http_app'):
-        app = mcp.streamable_http_app()
-    else:
-        # Fallback: Import the FastAPI app from app.py
-        from app import app
-except Exception:
-    # Ultimate fallback: create a simple HTTP server
+    from app import app
+except ImportError:
+    # Fallback: create a simple HTTP server if app.py doesn't exist
     from fastapi import FastAPI
     app = FastAPI(title="HistGradientBoostingClassifier MCP Server")
     
     @app.get("/")
     async def root():
-        return {"status": "error", "message": "FastMCP initialization failed"}
+        return {"status": "error", "message": "Could not import app from app.py"}
 
 if __name__ == "__main__":
     import uvicorn
