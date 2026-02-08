@@ -92,6 +92,14 @@ async def mcp_endpoint(request: Request):
                     }
                 })
             
+            # Handle notifications/initialized (some clients send this after initialize)
+            elif method_name == "notifications/initialized":
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "result": {}
+                })
+
             # Handle tools/list request
             elif method_name == "tools/list":
                 # Get tools from FastMCP - try to access the registered tools
