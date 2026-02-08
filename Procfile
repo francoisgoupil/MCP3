@@ -1,1 +1,1 @@
-web: uv run uvicorn server:app --host 0.0.0.0 --port $PORT
+web: export PATH="$HOME/.local/bin:$PATH" && uv run uvicorn server:app --host 0.0.0.0 --port $PORT
