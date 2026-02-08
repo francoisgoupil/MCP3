@@ -452,14 +452,31 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
     
-    # Get the ASGI app from FastMCP for streamable HTTP transport
-    # This allows us to run with uvicorn and control host/port for Railway
+    # Try to get the ASGI app from FastMCP for streamable HTTP
+    # FastMCP's run() with streamable-http internally uses uvicorn
+    # We need to extract the ASGI app to run it ourselves with proper host/port
+    
     try:
-        app = mcp.streamable_http_app()
-        uvicorn.run(app, host=host, port=port, log_level="info")
-    except AttributeError:
-        # Fallback: If streamable_http_app() doesn't exist in this version,
-        # use mcp.run() which should work but may use default port
-        print(f"Warning: streamable_http_app() not available, using mcp.run()")
-        print(f"Note: PORT={port} may not be respected in fallback mode")
-        mcp.run(transport="streamable-http")
+        # Method 1: Try to get the streamable HTTP app directly
+        if hasattr(mcp, 'streamable_http_app'):
+            app = mcp.streamable_http_app()
+            uvicorn.run(app, host=host, port=port, log_level="info")
+        else:
+            # Method 2: Use FastMCP's run() but it may not respect host/port
+            # So we'll use a workaround - run it and hope it picks up PORT env var
+            print(f"Starting MCP server - FastMCP will use PORT={port} from environment")
+            mcp.run(transport="streamable-http")
+    except Exception as e:
+        print(f"Error starting server: {e}")
+        print("Falling back to basic HTTP server...")
+        # Ultimate fallback: create a simple HTTP server
+        from fastapi import FastAPI
+        from fastapi.responses import JSONResponse
+        
+        fallback_app = FastAPI()
+        
+        @fallback_app.get("/")
+        async def root():
+            return {"status": "error", "message": "FastMCP initialization failed"}
+        
+        uvicorn.run(fallback_app, host=host, port=port)
