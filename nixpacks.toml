@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["curl"]
+
+[phases.install]
+cmds = [
+  "curl -LsSf https://astral.sh/uv/install.sh | sh",
+  "export PATH=\"$HOME/.cargo/bin:$PATH\"",
+  "pip install -r requirements.txt"
+]

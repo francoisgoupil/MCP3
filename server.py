@@ -445,6 +445,23 @@ def load_model(model_id: str, serialized_model: str) -> str:
         })
 
 
+# Expose app for uvicorn (e.g., uvicorn server:app)
+# Try to get the ASGI app from FastMCP for streamable HTTP
+try:
+    if hasattr(mcp, 'streamable_http_app'):
+        app = mcp.streamable_http_app()
+    else:
+        # Fallback: Import the FastAPI app from app.py
+        from app import app
+except Exception:
+    # Ultimate fallback: create a simple HTTP server
+    from fastapi import FastAPI
+    app = FastAPI(title="HistGradientBoostingClassifier MCP Server")
+    
+    @app.get("/")
+    async def root():
+        return {"status": "error", "message": "FastMCP initialization failed"}
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -452,31 +469,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
     
-    # Try to get the ASGI app from FastMCP for streamable HTTP
-    # FastMCP's run() with streamable-http internally uses uvicorn
-    # We need to extract the ASGI app to run it ourselves with proper host/port
-    
-    try:
-        # Method 1: Try to get the streamable HTTP app directly
-        if hasattr(mcp, 'streamable_http_app'):
-            app = mcp.streamable_http_app()
-            uvicorn.run(app, host=host, port=port, log_level="info")
-        else:
-            # Method 2: Use FastMCP's run() but it may not respect host/port
-            # So we'll use a workaround - run it and hope it picks up PORT env var
-            print(f"Starting MCP server - FastMCP will use PORT={port} from environment")
-            mcp.run(transport="streamable-http")
-    except Exception as e:
-        print(f"Error starting server: {e}")
-        print("Falling back to basic HTTP server...")
-        # Ultimate fallback: create a simple HTTP server
-        from fastapi import FastAPI
-        from fastapi.responses import JSONResponse
-        
-        fallback_app = FastAPI()
-        
-        @fallback_app.get("/")
-        async def root():
-            return {"status": "error", "message": "FastMCP initialization failed"}
-        
-        uvicorn.run(fallback_app, host=host, port=port)
+    # Run the app with uvicorn
+    uvicorn.run(app, host=host, port=port, log_level="info")
