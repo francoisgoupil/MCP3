@@ -446,17 +446,164 @@ def load_model(model_id: str, serialized_model: str) -> str:
 
 
 # Expose app for uvicorn (e.g., uvicorn server:app)
-# Import the FastAPI app from app.py which properly handles MCP protocol
-try:
-    from app import app
-except ImportError:
-    # Fallback: create a simple HTTP server if app.py doesn't exist
-    from fastapi import FastAPI
-    app = FastAPI(title="HistGradientBoostingClassifier MCP Server")
-    
-    @app.get("/")
-    async def root():
-        return {"status": "error", "message": "Could not import app from app.py"}
+# Create FastAPI app that integrates with FastMCP for MCP protocol
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import asyncio
+
+# Create FastAPI app
+app = FastAPI(title="HistGradientBoostingClassifier MCP Server")
+
+# Add CORS middleware for MCP clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "server": "HistGradientBoostingClassifier MCP Server",
+        "mcp_endpoint": "/mcp",
+        "protocol": "streamable-http"
+    }
+
+@app.api_route("/mcp", methods=["GET", "POST", "OPTIONS"])
+async def mcp_endpoint(request: Request):
+    """MCP protocol endpoint for streamable HTTP transport"""
+    try:
+        method = request.method
+        
+        if method == "OPTIONS":
+            return JSONResponse({"status": "ok"})
+        
+        if method == "POST":
+            try:
+                body = await request.json()
+            except:
+                body = {}
+        else:
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": None,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {
+                        "name": "HistGradientBoostingClassifier MCP Server",
+                        "version": "1.0.0"
+                    }
+                }
+            })
+        
+        if "method" in body:
+            method_name = body.get("method")
+            
+            if method_name == "initialize":
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {
+                            "name": "HistGradientBoostingClassifier MCP Server",
+                            "version": "1.0.0"
+                        }
+                    }
+                })
+            
+            elif method_name == "tools/list":
+                tools = []
+                try:
+                    if hasattr(mcp, '_tools'):
+                        tool_dict = mcp._tools
+                    elif hasattr(mcp, 'tools'):
+                        tool_dict = mcp.tools
+                    else:
+                        tool_dict = {}
+                    
+                    for tool_name, tool_info in tool_dict.items():
+                        tools.append({
+                            "name": tool_name,
+                            "description": getattr(tool_info, '__doc__', '') or '',
+                            "inputSchema": {"type": "object", "properties": {}}
+                        })
+                except:
+                    tools = []
+                
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "result": {"tools": tools}
+                })
+            
+            elif method_name == "tools/call":
+                params = body.get("params", {})
+                tool_name = params.get("name")
+                arguments = params.get("arguments", {})
+                
+                try:
+                    tool_func = None
+                    if hasattr(mcp, '_tools') and tool_name in mcp._tools:
+                        tool_func = mcp._tools[tool_name]
+                    elif hasattr(mcp, 'tools') and tool_name in mcp.tools:
+                        tool_func = mcp.tools[tool_name]
+                    
+                    if tool_func:
+                        if asyncio.iscoroutinefunction(tool_func):
+                            result = await tool_func(**arguments)
+                        else:
+                            result = tool_func(**arguments)
+                        
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": body.get("id"),
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": json.dumps(result) if not isinstance(result, str) else result
+                                }]
+                            }
+                        })
+                    else:
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": body.get("id"),
+                            "error": {"code": -32601, "message": f"Tool not found: {tool_name}"}
+                        }, status_code=400)
+                except Exception as e:
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": body.get("id"),
+                        "error": {"code": -32603, "message": f"Error calling tool: {str(e)}"}
+                    }, status_code=500)
+            else:
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "error": {"code": -32601, "message": f"Method not found: {method_name}"}
+                }, status_code=400)
+        else:
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": body.get("id"),
+                "error": {"code": -32600, "message": "Invalid Request"}
+            }, status_code=400)
+            
+    except Exception as e:
+        import traceback
+        return JSONResponse({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32603, "message": f"Internal error: {str(e)}"}
+        }, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn
