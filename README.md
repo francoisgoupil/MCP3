@@ -82,6 +82,8 @@ Once deployed, your MCP server will be available at your Railway URL. You can te
 2. Using the MCP Inspector: `npx -y @modelcontextprotocol/inspector` and connecting to your Railway URL
 3. Connecting from an MCP client using the streamable-http transport
 
+**Current Deployment URL:** `https://web-production-a620a.up.railway.app`
+
 ## Usage
 
 Once deployed, the MCP server will be accessible at your Railway URL. You can connect to it using any MCP-compatible client.
@@ -94,7 +96,7 @@ Add to your Claude Desktop MCP configuration (`~/Library/Application Support/Cla
 {
   "mcpServers": {
     "histgradientboosting": {
-      "url": "https://your-railway-app.railway.app",
+      "url": "https://web-production-a620a.up.railway.app",
       "transport": "streamable-http"
     }
   }
